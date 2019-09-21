@@ -1,4 +1,8 @@
 // Compile and link with -pthread.
+// Input is the "inp.txt" file (End-Of-Line terminated)
+// Actually, using shell is better for reading program arguments as it allows
+// to specify space-containing arguments easily.
+// Maybe I will implement it in some time. Maybe not.
 
 #include <stdio.h>
 #include <string.h>
@@ -6,6 +10,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <wait.h>
 
 #define TIMEOUT 5
 #define SINGLE_MALLOC_SIZE 1024
@@ -41,12 +46,21 @@ void split(char* string, const char* delimiters, char*** tokens,
     *tokens = tokenArray;
 }
 
-void* waitAndKill(void* pidPtrVoid) {
-  pid_t* pidPtr = (pid_t*)pidPtrVoid;
-  sleep(TIMEOUT);
-  kill(*pidPtr, SIGTERM);
-  kill(*pidPtr, SIGKILL);
-  free(pidPtr);
+void* waitAndKill(void* executeeEntryPtrVoid) {
+  executeeEntry* ee = (executeeEntry*)executeeEntryPtrVoid;
+  sleep(ee->startDelaySeconds);
+  pid_t pid = ee->pid;
+  time_t startTime = time(NULL); // time() is not very precise but it's enough for us
+  while (time(NULL) < startTime + TIMEOUT) {
+    // We will check the state of the process periodically.
+    // It is not the best idea but it is good enough for this use case
+    nanosleep((const struct timespec[]){{0, 10L * 1000000L}}, NULL); // 10 ms
+    if (waitpid(pid, NULL, WNOHANG) != 0) return NULL;
+  }
+  printf("Timeout of process %d exceeded. Aborting...\n", pid);
+  kill(pid, SIGTERM);
+  kill(pid, SIGKILL);
+  free(executeeEntryPtrVoid);
   return NULL;
 }
 
@@ -89,14 +103,17 @@ int main(int argc, char const *argv[]) {
     char** tokens = NULL;
     int n = -1;
     split(buf, delim, &tokens, &n);
-    if (n <= 2) continue;
-    *threadPtr = executeFile(tokens);
+    if (n > 2) {
+      *threadPtr = executeFile(tokens);
+      threadPtr++;
+    }
+    free(tokens);
   }
   fclose(file);
-  for (pthread_t* joinedThreadPtr = threads; joinedThreadPtr <= threadPtr;
+  for (pthread_t* joinedThreadPtr = threads; joinedThreadPtr < threadPtr;
         joinedThreadPtr++) {
     pthread_join(*joinedThreadPtr, NULL);
-    puts("Success");
   }
+  puts("All processes terminated. Closing executor...");
   return 0;
 }
