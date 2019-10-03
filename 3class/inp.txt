@@ -1,0 +1,5 @@
+0 ls -a
+1 echo 'Suna no wakusei'
+1 python pytest.py
+1 echo "PressFToPayRespects"
+2 echo FUS RO DAH!
