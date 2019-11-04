@@ -117,6 +117,7 @@ void fileInput() {
     FILE* wipingTimesFile = fopen("wiping-times.txt", "r");
     while (fscanf(wipingTimesFile, "%ld:%ld", &a, &b) == 2) {
       wipingTimes[i] = (longPair){.a = a, .b = b};
+      i++;
     }
     fclose(wipingTimesFile);
 
